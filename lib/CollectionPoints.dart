@@ -9,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as loc;
 import 'package:http/http.dart' as http;
 import 'package:tracking/CollectionPointImageUploader.dart';
+import 'package:tracking/IncidentReport.dart';
 
 class MapSample extends StatefulWidget {
   const MapSample({super.key});
@@ -163,46 +164,51 @@ class MapSampleState extends State<MapSample> {
 
   void _onMarkerTapped(MarkerId markerId) {
     if (_isTracking) {
-      showDialog(
+      showModalBottomSheet(
         context: context,
         builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Take a picture'),
-            content: Text(
-                'Would you like to take a picture of this collection point?'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () {
-                  CollectionPointImageUploader(
-                    tourneeId: id,
-                    agentId: agentId,
-                    collectionPointId: markerId.value.toString(),
-                    collectionPointName: 'Collection Point Name',
-                    lat: _markers
-                        .firstWhere((marker) => marker.markerId == markerId)
-                        .position
-                        .latitude,
-                    lng: _markers
-                        .firstWhere((marker) => marker.markerId == markerId)
-                        .position
-                        .longitude,
-                  ).uploadImage();
-                  Navigator.of(context).pop();
-                },
-                child: Text('Take Picture'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: Text('Cancel'),
-              ),
-            ],
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text('Take a picture'),
+                SizedBox(height: 10),
+                Text(
+                    'Would you like to take a picture of this collection point?'),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    CollectionPointImageUploader(
+                      tourneeId: id,
+                      agentId: agentId,
+                      collectionPointId: markerId.value.toString(),
+                      collectionPointName: 'Collection Point Name',
+                      lat: _markers
+                          .firstWhere((marker) => marker.markerId == markerId)
+                          .position
+                          .latitude,
+                      lng: _markers
+                          .firstWhere((marker) => marker.markerId == markerId)
+                          .position
+                          .longitude,
+                    ).uploadImage();
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Take Picture'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Cancel'),
+                ),
+              ],
+            ),
           );
         },
       );
     } else {
-      // Show a message that tournees is not started
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
@@ -279,6 +285,11 @@ class MapSampleState extends State<MapSample> {
           FloatingActionButton(
             onPressed: _zoomOut,
             child: Icon(Icons.remove),
+          ),
+          SizedBox(height: 16),
+          FloatingActionButton(
+            onPressed: () => IncidentReport.reportIncident(context),
+            child: Icon(Icons.report),
           ),
         ],
       ),
