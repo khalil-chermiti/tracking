@@ -1,12 +1,14 @@
 import 'dart:async';
-import 'dart:developer';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as loc;
+import 'package:http/http.dart' as http;
 
 class MapSample extends StatefulWidget {
   const MapSample({super.key});
@@ -16,30 +18,52 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
+  Set<Marker> _markers = {};
+  List<LatLng> _polylinePoints = [];
+  List<LatLng> _collectionPoints = [];
+  loc.Location _locationTracker = loc.Location();
+  Timer? _locationUpdateTimer;
+  bool _isTracking = false;
+  final Completer<GoogleMapController> _controller =
+      Completer<GoogleMapController>();
+
+  // Initial Camera Position
+  static CameraPosition _kGooglePlex = CameraPosition(
+    target: LatLng(35.81271783644581, 10.0772944703472),
+    zoom: 10,
+  );
+
+  final DatabaseReference _databaseReference = FirebaseDatabase(
+    databaseURL:
+        'https://admin-dashboard-30e2d-default-rtdb.europe-west1.firebasedatabase.app/',
+  ).reference();
+
+  // Get Collection Points On Page Load
   Future<void> getAgentsCollection() async {
     final FirebaseAuth _auth = FirebaseAuth.instance;
     final User? user = _auth.currentUser;
 
-    if (user!= null) {
+    if (user != null) {
       final agentId = user.uid;
       final FirebaseFirestore _firestore = FirebaseFirestore.instance;
       final CollectionReference agentsRef = _firestore.collection('tournees');
 
-      final QuerySnapshot querySnapshot = await agentsRef.where('agentId', isEqualTo: agentId).get();
+      final QuerySnapshot querySnapshot =
+          await agentsRef.where('agentId', isEqualTo: agentId).get();
 
       if (querySnapshot.docs.isNotEmpty) {
         print('Agents collection matching with current logged in agent:');
         querySnapshot.docs.forEach((document) {
           print(document.data());
           final data = document.data() as Map<String, dynamic>;
-          if(data != null) {
+          if (data != null) {
             final pointsDeCollect = data['pointsDeCollect'] as List<dynamic>;
 
             pointsDeCollect.forEach((point) {
               final lat = point['lat'] as double;
               final lng = point['lng'] as double;
-              final markerIdVal = Random().nextInt(10000)
-                  .toString(); // generate random id
+              final markerIdVal =
+                  Random().nextInt(10000).toString(); // generate random id
               _markers.add(
                 Marker(
                   markerId: MarkerId(markerIdVal),
@@ -47,17 +71,22 @@ class MapSampleState extends State<MapSample> {
                   icon: BitmapDescriptor.defaultMarker,
                 ),
               );
+
+              _collectionPoints.add(LatLng(lat, lng));
             });
 
             final firstPoint = pointsDeCollect[0];
-            if(firstPoint != null) {
+            if (firstPoint != null) {
               _kGooglePlex = CameraPosition(
-                target: LatLng(firstPoint['lat'] as double, firstPoint['lng'] as double),
+                target: LatLng(
+                    firstPoint['lat'] as double, firstPoint['lng'] as double),
                 zoom: 19,
               );
             }
           }
         });
+
+        setState(() {}); // Call setState to update the markers
       } else {
         print('No agents collection matching with current logged in agent');
       }
@@ -66,60 +95,77 @@ class MapSampleState extends State<MapSample> {
     }
   }
 
-  bool _isTracking = false;
-  final Completer<GoogleMapController> _controller =
-      Completer<GoogleMapController>();
+  // Save Each New Position To Realtime Database
+  Future<void> updateAgentPosition(
+      String agentId, double lat, double lng) async {
+    final DatabaseReference database = FirebaseDatabase.instance.ref();
+    await _databaseReference.child('tracking').push().set({
+      'agentId': agentId,
+      'lat': lat,
+      'lng': lng,
+    });
+  }
 
-  static CameraPosition _kGooglePlex = CameraPosition(
-    target: LatLng(35.81271783644581, 10.0772944703472),
-    zoom: 10,
-  );
+  Future<List<LatLng>> getRoadRoute(LatLng start, LatLng end) async {
+    final String apiKey = 'AIzaSyDXdXXNJTBEKGgZWNm-bYhrUDz6_3gysTY';
+    final String url =
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${start.latitude},${start.longitude}&destination=${end.latitude},${end.longitude}&mode=driving&key=$apiKey';
 
-  Set<Marker> _markers = {};
-  List<LatLng> _polylinePoints = [];
+    final response = await http.get(Uri.parse(url));
 
-  loc.Location _locationTracker = loc.Location();
-  StreamSubscription<loc.LocationData>? _locationSubscription;
-  Timer? _locationUpdateTimer;
+    if (response.statusCode == 200) {
+      final decodedData = json.decode(response.body);
+      final routes = decodedData['routes'] as List;
+      if (routes.isNotEmpty) {
+        final points = routes[0]['overview_polyline']['points'];
+        return _decodePolyline(points);
+      }
+    } else {
+      throw Exception('Failed to load road route');
+    }
+    return [];
+  }
 
-  void _onMarkerTapped(MarkerId markerId) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Marker Clicked'),
-          content: Text('You clicked on marker $markerId'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
+// Helper method to decode polyline points
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> poly = [];
+    int index = 0, len = encoded.length;
+    int lat = 0, lng = 0;
+
+    while (index < len) {
+      int b, shift = 0, result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      final LatLng point = LatLng(lat / 1E5, lng / 1E5);
+      poly.add(point);
+    }
+    return poly;
   }
 
   @override
   void initState() {
     super.initState();
-
-    _locationSubscription =
-        _locationTracker.onLocationChanged.listen((loc.LocationData location) {
-      if (location != null) {
-        _polylinePoints.add(LatLng(location.latitude!, location.longitude!));
-        setState(() {});
-      }
-    });
-
-    _locationUpdateTimer = Timer.periodic(Duration(seconds: 1), (timer) {});
+    getAgentsCollection();
   }
 
   @override
   Widget build(BuildContext context) {
-    getAgentsCollection();
     return Scaffold(
       appBar: AppBar(
         title: Text('Collection Points'),
@@ -138,19 +184,17 @@ class MapSampleState extends State<MapSample> {
               ],
       ),
       body: GoogleMap(
-        mapType: MapType.hybrid,
+        mapType: MapType.normal,
         initialCameraPosition: _kGooglePlex,
         markers: _markers.map((marker) {
           return Marker(
-            markerId: marker.markerId,
-            position: marker.position,
-            icon: marker.icon,
-            onTap: () => _onMarkerTapped(marker.markerId),
-          );
+              markerId: marker.markerId,
+              position: marker.position,
+              icon: marker.icon);
         }).toSet(),
         polylines: {
           Polyline(
-            polylineId: PolylineId('line'),
+            polylineId: PolylineId('roadRoute'),
             points: _polylinePoints,
             color: Colors.blue,
             width: 3,
@@ -187,28 +231,98 @@ class MapSampleState extends State<MapSample> {
     final GoogleMapController controller = await _controller.future;
     final loc.LocationData? location = await _locationTracker.getLocation();
     if (location != null) {
-      _polylinePoints.add(LatLng(location.latitude!, location.longitude!));
-      setState(() {
-        _markers.add(
-          Marker(
-            markerId: MarkerId('currentLocation'),
-            position: LatLng(location.latitude!, location.longitude!),
-            icon: BitmapDescriptor.defaultMarker,
-          ),
-        );
-      });
-      await controller.animateCamera(
-        CameraUpdate.newLatLng(LatLng(location.latitude!, location.longitude!)),
-      );
+      LatLng currentPosition = LatLng(location.latitude!, location.longitude!);
 
-      _locationUpdateTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        _getUserLocation();
-      });
+      // Check if _collectionPoints is not empty
+      if (_collectionPoints.isNotEmpty) {
+        // Find the nearest point
+        LatLng nearestPoint = _collectionPoints.first;
+        double minDistance = _calculateDistance(currentPosition, nearestPoint);
+
+        for (LatLng point in _collectionPoints) {
+          double distance = _calculateDistance(currentPosition, point);
+          if (distance < minDistance) {
+            nearestPoint = point;
+            minDistance = distance;
+          }
+        }
+
+        // Get the road route points
+        List<LatLng> roadRoutePoints =
+            await getRoadRoute(currentPosition, nearestPoint);
+
+        setState(() {
+          // Draw the road route on the map
+          _polylinePoints.clear();
+          _polylinePoints.addAll(roadRoutePoints);
+
+          _markers.add(
+            Marker(
+              markerId: MarkerId('currentLocation'),
+              position: currentPosition,
+              icon: BitmapDescriptor.defaultMarker,
+            ),
+          );
+        });
+        await controller.animateCamera(
+          CameraUpdate.newLatLng(currentPosition),
+        );
+
+        if (!_isTracking) {
+          // Start a timer to update the location every 10 seconds
+          _locationUpdateTimer =
+              Timer.periodic(Duration(seconds: 10), (timer) async {
+            final loc.LocationData? newLocation =
+                await _locationTracker.getLocation();
+            if (newLocation != null) {
+              LatLng newLatLng =
+                  LatLng(newLocation.latitude!, newLocation.longitude!);
+              List<LatLng> newRoutePoints =
+                  await getRoadRoute(currentPosition, newLatLng);
+              //_polylinePoints.addAll(newRoutePoints);
+              setState(() {
+                _markers.add(
+                  Marker(
+                    markerId: MarkerId('currentLocation'),
+                    position: newLatLng,
+                    icon: BitmapDescriptor.defaultMarker,
+                  ),
+                );
+              });
+
+              final FirebaseAuth auth = FirebaseAuth.instance;
+              final User? user = auth.currentUser;
+              if (user != null) {
+                updateAgentPosition(
+                    user.uid, newLocation.latitude!, newLocation.longitude!);
+                print("data saved to Firestore");
+              }
+            }
+          });
+        }
+      } else {
+        print('No collection points available to find the nearest point');
+      }
     }
 
     setState(() {
       _isTracking = true;
     });
+  }
+
+// Helper method to calculate the distance between two LatLng points
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    double lat1 = point1.latitude;
+    double lon1 = point1.longitude;
+    double lat2 = point2.latitude;
+    double lon2 = point2.longitude;
+
+    var p = 0.017453292519943295;
+    var a = 0.5 -
+        cos((lat2 - lat1) * p) / 2 +
+        cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
+
+    return 12742 * asin(sqrt(a));
   }
 
   Future<void> _goToTheFirstLocation() async {
@@ -226,22 +340,25 @@ class MapSampleState extends State<MapSample> {
     controller.animateCamera(CameraUpdate.zoomOut());
   }
 
+  // arreter le timer lorsque on arrete le tracking de la position
   void _stopLocationUpdates() {
-    _locationSubscription?.cancel();
-    setState(() {
-      _markers
-          .removeWhere((marker) => marker.markerId.value == 'currentLocation');
-    });
+    print("Stop Location Tracking");
     _locationUpdateTimer?.cancel();
 
     setState(() {
       _isTracking = false;
     });
+
+    setState(() {
+      _markers
+          .removeWhere((marker) => marker.markerId.value == 'currentLocation');
+    });
+    _polylinePoints.clear();
   }
 
+  // Quand on ferme le Map on va détruire le timer
   @override
   void dispose() {
-    _locationSubscription?.cancel();
     _locationUpdateTimer?.cancel();
     super.dispose();
   }
