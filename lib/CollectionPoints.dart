@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -9,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as loc;
 import 'package:http/http.dart' as http;
+import 'package:tracking/CollectionPointImageUploader.dart';
 
 class MapSample extends StatefulWidget {
   const MapSample({super.key});
@@ -26,6 +26,9 @@ class MapSampleState extends State<MapSample> {
   bool _isTracking = false;
   final Completer<GoogleMapController> _controller =
       Completer<GoogleMapController>();
+  String agentId = "";
+
+  var id;
 
   // Initial Camera Position
   static CameraPosition _kGooglePlex = CameraPosition(
@@ -44,7 +47,7 @@ class MapSampleState extends State<MapSample> {
     final User? user = _auth.currentUser;
 
     if (user != null) {
-      final agentId = user.uid;
+      agentId = user.uid;
       final FirebaseFirestore _firestore = FirebaseFirestore.instance;
       final CollectionReference agentsRef = _firestore.collection('tournees');
 
@@ -158,6 +161,57 @@ class MapSampleState extends State<MapSample> {
     return poly;
   }
 
+  void _onMarkerTapped(MarkerId markerId) {
+    if (_isTracking) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Take a picture'),
+            content: Text(
+                'Would you like to take a picture of this collection point?'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () {
+                  CollectionPointImageUploader(
+                    tourneeId: id,
+                    agentId: agentId,
+                    collectionPointId: markerId.value.toString(),
+                    collectionPointName: 'Collection Point Name',
+                    lat: _markers
+                        .firstWhere((marker) => marker.markerId == markerId)
+                        .position
+                        .latitude,
+                    lng: _markers
+                        .firstWhere((marker) => marker.markerId == markerId)
+                        .position
+                        .longitude,
+                  ).uploadImage();
+                  Navigator.of(context).pop();
+                },
+                child: Text('Take Picture'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: Text('Cancel'),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      // Show a message that tournees is not started
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Tournees is not started. Please start tracking first.'),
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -188,9 +242,13 @@ class MapSampleState extends State<MapSample> {
         initialCameraPosition: _kGooglePlex,
         markers: _markers.map((marker) {
           return Marker(
-              markerId: marker.markerId,
-              position: marker.position,
-              icon: marker.icon);
+            markerId: marker.markerId,
+            position: marker.position,
+            icon: marker.icon,
+            onTap: () {
+              _onMarkerTapped(marker.markerId);
+            },
+          );
         }).toSet(),
         polylines: {
           Polyline(
@@ -269,6 +327,31 @@ class MapSampleState extends State<MapSample> {
         );
 
         if (!_isTracking) {
+          // Save tournees to Firestore
+          final FirebaseAuth auth = FirebaseAuth.instance;
+          final User? user = auth.currentUser;
+          if (user != null) {
+            final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+            final CollectionReference tourneesRef =
+                _firestore.collection('tourneesRealisees');
+            final String agentId = user.uid;
+            final double lat = nearestPoint.latitude;
+            final double lng = nearestPoint.longitude;
+            final DateTime date = DateTime.now();
+
+            id = DateTime.now().microsecondsSinceEpoch.toString();
+
+            await tourneesRef.add({
+              "id": id,
+              'date': date,
+              'agentId': agentId,
+              'lat': lat,
+              'lng': lng,
+            });
+
+            print('Tournees saved to Firestore');
+          }
+
           // Start a timer to update the location every 10 seconds
           _locationUpdateTimer =
               Timer.periodic(Duration(seconds: 10), (timer) async {
@@ -341,7 +424,7 @@ class MapSampleState extends State<MapSample> {
   }
 
   // arreter le timer lorsque on arrete le tracking de la position
-  void _stopLocationUpdates() {
+  void _stopLocationUpdates() async {
     print("Stop Location Tracking");
     _locationUpdateTimer?.cancel();
 
