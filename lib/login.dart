@@ -15,44 +15,84 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Login'),
-      ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: <Widget>[
-            TextFormField(
-              validator: (input) {
-                if (input == null || input.isEmpty) {
-                  return 'Please type an email';
-                }
-                return null;
-              },
-              onSaved: (input) => _email = input!,
-              decoration: InputDecoration(
-                labelText: 'Email',
+      body: Stack(
+        children: [
+          // Image de fond
+          Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/trash_truck_background.jpg'), // Chemin relatif correct
+                fit: BoxFit.cover,
               ),
             ),
-            TextFormField(
-              validator: (input) {
-                if (input == null || input.length < 6) {
-                  return 'Your password needs to be at least 6 characters';
-                }
-                return null;
-              },
-              onSaved: (input) => _password = input!,
-              decoration: InputDecoration(
-                labelText: 'Password',
+          ),
+          // Formulaire de connexion
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    // Champ de saisie de l'email
+                    TextFormField(
+                      validator: (input) {
+                        if (input == null || input.isEmpty) {
+                          return 'Please type an email';
+                        }
+                        return null;
+                      },
+                      onSaved: (input) => _email = input!,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8),
+                        labelText: 'Email',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16.0),
+                    // Champ de saisie du mot de passe
+                    TextFormField(
+                      validator: (input) {
+                        if (input == null || input.length < 6) {
+                          return 'Your password needs to be at least 6 characters';
+                        }
+                        return null;
+                      },
+                      onSaved: (input) => _password = input!,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8),
+                        labelText: 'Password',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      obscureText: true,
+                    ),
+                    SizedBox(height: 20.0),
+                    // Bouton de connexion
+                    ElevatedButton(
+                      onPressed: signIn,
+                      style: ElevatedButton.styleFrom(
+                        primary: Colors.green, // Couleur du bouton
+                        padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                        textStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      child: Text(
+                        'Sign in',
+                        style: TextStyle(color: Colors.white), // Couleur du texte
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              obscureText: true,
             ),
-            ElevatedButton(
-              onPressed: signIn,
-              child: Text('Sign in'),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
