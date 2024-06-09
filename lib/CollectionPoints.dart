@@ -19,10 +19,11 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
-  Set<Marker> _markers = {};
-  List<LatLng> _polylinePoints = [];
-  List<LatLng> _collectionPoints = [];
-  loc.Location _locationTracker = loc.Location();
+  DateTime startDate = DateTime.now();
+  final Set<Marker> _markers = {};
+  final List<LatLng> _polylinePoints = [];
+  final List<LatLng> _collectionPoints = [];
+  final loc.Location _locationTracker = loc.Location();
   Timer? _locationUpdateTimer;
   bool _isTracking = false;
   final Completer<GoogleMapController> _controller =
@@ -32,7 +33,7 @@ class MapSampleState extends State<MapSample> {
   var id;
 
   // Initial Camera Position
-  static CameraPosition _kGooglePlex = CameraPosition(
+  static CameraPosition _kGooglePlex = const CameraPosition(
     target: LatLng(35.81271783644581, 10.0772944703472),
     zoom: 10,
   );
@@ -44,13 +45,13 @@ class MapSampleState extends State<MapSample> {
 
   // Get Collection Points On Page Load
   Future<void> getAgentsCollection() async {
-    final FirebaseAuth _auth = FirebaseAuth.instance;
-    final User? user = _auth.currentUser;
+    final FirebaseAuth auth = FirebaseAuth.instance;
+    final User? user = auth.currentUser;
 
     if (user != null) {
       agentId = user.uid;
-      final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-      final CollectionReference agentsRef = _firestore.collection('tournees');
+      final FirebaseFirestore firestore = FirebaseFirestore.instance;
+      final CollectionReference agentsRef = firestore.collection('tournees');
 
       final QuerySnapshot querySnapshot =
           await agentsRef.where('agentId', isEqualTo: agentId).get();
@@ -58,7 +59,6 @@ class MapSampleState extends State<MapSample> {
       if (querySnapshot.docs.isNotEmpty) {
         print('Agents collection matching with current logged in agent:');
         querySnapshot.docs.forEach((document) {
-          print(document.data());
           final data = document.data() as Map<String, dynamic>;
           if (data != null) {
             final pointsDeCollect = data['pointsDeCollect'] as List<dynamic>;
@@ -89,10 +89,59 @@ class MapSampleState extends State<MapSample> {
             }
           }
         });
-
-        setState(() {}); // Call setState to update the markers
       } else {
         print('No agents collection matching with current logged in agent');
+      }
+
+      await _controller.future;
+
+      final loc.LocationData? location = await _locationTracker.getLocation();
+      if (location != null) {
+        LatLng currentPosition =
+            LatLng(location.latitude!, location.longitude!);
+
+        _kGooglePlex = CameraPosition(
+          target: LatLng(currentPosition.latitude, currentPosition.longitude),
+          zoom: 19,
+        );
+      }
+
+      final String supervisorId = await IncidentReport.getSupervisorId(agentId);
+
+      final CollectionReference usersRef = firestore.collection('users');
+
+      final QuerySnapshot centreDeDepotsSnapshot =
+          await usersRef.where('id', isEqualTo: supervisorId).get();
+
+      if (centreDeDepotsSnapshot.docs.isNotEmpty) {
+        centreDeDepotsSnapshot.docs.forEach((document) {
+          final data = document.data() as Map<String, dynamic>;
+          print("sablito");
+          print(data);
+
+          if (data != null) {
+            final pointsDeCollect = data['centresDeDepots'] as List<dynamic>;
+
+            pointsDeCollect.forEach((point) {
+              final lat = point['lat'] as double;
+              final lng = point['lng'] as double;
+              final markerIdVal =
+                  Random().nextInt(10000).toString(); // generate random id
+              _markers.add(
+                Marker(
+                  markerId: MarkerId(markerIdVal),
+                  position: LatLng(lat, lng),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueViolet),
+                ),
+              );
+
+              _collectionPoints.add(LatLng(lat, lng));
+            });
+          }
+        });
+
+        setState(() {}); // Call setState to update the markers
       }
     } else {
       print('No user is signed in');
@@ -102,7 +151,6 @@ class MapSampleState extends State<MapSample> {
   // Save Each New Position To Realtime Database
   Future<void> updateAgentPosition(
       String agentId, double lat, double lng) async {
-    final DatabaseReference database = FirebaseDatabase.instance.ref();
     await _databaseReference.child('tracking').push().set({
       'agentId': agentId,
       'lat': lat,
@@ -111,7 +159,7 @@ class MapSampleState extends State<MapSample> {
   }
 
   Future<List<LatLng>> getRoadRoute(LatLng start, LatLng end) async {
-    final String apiKey = 'AIzaSyDXdXXNJTBEKGgZWNm-bYhrUDz6_3gysTY';
+    const String apiKey = 'AIzaSyDXdXXNJTBEKGgZWNm-bYhrUDz6_3gysTY';
     final String url =
         'https://maps.googleapis.com/maps/api/directions/json?origin=${start.latitude},${start.longitude}&destination=${end.latitude},${end.longitude}&mode=driving&key=$apiKey';
 
@@ -172,11 +220,11 @@ class MapSampleState extends State<MapSample> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text('Take a picture'),
-                SizedBox(height: 10),
-                Text(
+                const Text('Take a picture'),
+                const SizedBox(height: 10),
+                const Text(
                     'Would you like to take a picture of this collection point?'),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
                     CollectionPointImageUploader(
@@ -195,7 +243,7 @@ class MapSampleState extends State<MapSample> {
                     ).uploadImage();
                     Navigator.of(context).pop();
                   },
-                  child: Text('Take Picture'),
+                  child: const Text('Take Picture'),
                 ),
                 TextButton(
                   onPressed: () {
@@ -210,7 +258,7 @@ class MapSampleState extends State<MapSample> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content:
               Text('Tournees is not started. Please start tracking first.'),
         ),
@@ -228,11 +276,11 @@ class MapSampleState extends State<MapSample> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Collection Points'),
+        title: const Text('Collection Points'),
         actions: _isTracking
             ? [
                 IconButton(
-                  icon: Icon(Icons.stop),
+                  icon: const Icon(Icons.stop),
                   onPressed: _stopLocationUpdates,
                 ),
               ]
@@ -327,9 +375,10 @@ class MapSampleState extends State<MapSample> {
 
           _markers.add(
             Marker(
-              markerId: MarkerId('currentLocation'),
+              markerId: const MarkerId('currentLocation'),
               position: currentPosition,
-              icon: BitmapDescriptor.defaultMarker,
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueBlue),
             ),
           );
         });
@@ -337,35 +386,12 @@ class MapSampleState extends State<MapSample> {
           CameraUpdate.newLatLng(currentPosition),
         );
 
+        startDate = DateTime.now();
+
         if (!_isTracking) {
-          // Save tournees to Firestore
-          final FirebaseAuth auth = FirebaseAuth.instance;
-          final User? user = auth.currentUser;
-          if (user != null) {
-            final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-            final CollectionReference tourneesRef =
-                _firestore.collection('tourneesRealisees');
-            final String agentId = user.uid;
-            final double lat = nearestPoint.latitude;
-            final double lng = nearestPoint.longitude;
-            final DateTime date = DateTime.now();
-
-            id = DateTime.now().microsecondsSinceEpoch.toString();
-
-            await tourneesRef.add({
-              "id": id,
-              'date': date,
-              'agentId': agentId,
-              'lat': lat,
-              'lng': lng,
-            });
-
-            print('Tournees saved to Firestore');
-          }
-
           // Start a timer to update the location every 10 seconds
           _locationUpdateTimer =
-              Timer.periodic(Duration(seconds: 10), (timer) async {
+              Timer.periodic(const Duration(seconds: 10), (timer) async {
             final loc.LocationData? newLocation =
                 await _locationTracker.getLocation();
             if (newLocation != null) {
@@ -448,6 +474,28 @@ class MapSampleState extends State<MapSample> {
           .removeWhere((marker) => marker.markerId.value == 'currentLocation');
     });
     _polylinePoints.clear();
+
+    // Save tournees to Firestore
+    final FirebaseAuth auth = FirebaseAuth.instance;
+    final User? user = auth.currentUser;
+    if (user != null) {
+      final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+      final CollectionReference tourneesRef =
+          _firestore.collection('tourneesRealisees');
+      final String agentId = user.uid;
+
+      id = DateTime.now().microsecondsSinceEpoch.toString();
+
+      await tourneesRef.add({
+        "id": id,
+        'startDate': startDate,
+        'agentId': agentId,
+        'endDate': DateTime.now(),
+        'supervisorId': await IncidentReport.getSupervisorId(agentId)
+      });
+
+      print('Tournees saved to Firestore');
+    }
   }
 
   // Quand on ferme le Map on va détruire le timer

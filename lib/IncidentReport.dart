@@ -1,8 +1,45 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
 class IncidentReport {
+  static Future<String> getSupervisorId(String agentId) async {
+    try {
+      // Access Firestore instance
+      FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+      // Fetch all documents from the users collection
+      QuerySnapshot querySnapshot = await firestore.collection('users').get();
+
+      // Iterate through each document to find the agent with the specified ID
+      for (QueryDocumentSnapshot doc in querySnapshot.docs) {
+        // Get the 'agents' field from the document data
+        var data = doc.data() as Map<String, dynamic>;
+
+        if (data != null) {
+          List<dynamic> agents = data["agents"];
+
+          //symotion-s) Check if any agent in the 'agents' array has the specified ID
+          for (var agent in agents) {
+            if (agent['id'] == agentId) {
+              return data["id"];
+              // Return the ID of the user (supervisor) containing the agent
+            }
+          }
+        }
+        return "";
+      }
+
+      // If no user contains the agent with the specified ID
+      print("No user found with the agent ID: $agentId");
+      return "";
+    } catch (error) {
+      // Handle errors
+      print("Error fetching supervisor ID: $error");
+      return "";
+    }
+  }
+
   static Future<void> reportIncident(BuildContext context) async {
     final TextEditingController _incidentController = TextEditingController();
     final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -31,8 +68,10 @@ class IncidentReport {
                 if (incidentMessage.isNotEmpty) {
                   final FirebaseFirestore _firestore =
                       FirebaseFirestore.instance;
+
                   await _firestore.collection('incidents').add({
                     'agentId': user.uid,
+                    'supervisorId': await getSupervisorId(user.uid),
                     'incident': incidentMessage,
                     'timestamp': DateTime.now(),
                   });

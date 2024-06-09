@@ -19,9 +19,10 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           // Image de fond
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/trash_truck_background.jpg'), // Chemin relatif correct
+                image: AssetImage('assets/trash_truck_background.jpg'),
+                // Chemin relatif correct
                 fit: BoxFit.cover,
               ),
             ),
@@ -73,18 +74,21 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       obscureText: true,
                     ),
-                    SizedBox(height: 20.0),
+                    const SizedBox(height: 20.0),
                     // Bouton de connexion
                     ElevatedButton(
                       onPressed: signIn,
                       style: ElevatedButton.styleFrom(
-                        primary: Colors.green, // Couleur du bouton
-                        padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                        textStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        backgroundColor: Colors.green, // Couleur du bouton
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                        textStyle: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
                       ),
-                      child: Text(
+                      child: const Text(
                         'Sign in',
-                        style: TextStyle(color: Colors.white), // Couleur du texte
+                        style:
+                            TextStyle(color: Colors.white), // Couleur du texte
                       ),
                     ),
                   ],
@@ -112,6 +116,12 @@ class _LoginPageState extends State<LoginPage> {
         );
       } catch (e) {
         print(e.toString());
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+            Text('Email or password are incorrect'),
+          ),
+        );
       }
     }
   }
