@@ -107,6 +107,9 @@ class MapSampleState extends State<MapSample> {
       }
 
       final String supervisorId = await IncidentReport.getSupervisorId(agentId);
+      print(agentId);
+      print("supervisor");
+      print(supervisorId);
 
       final CollectionReference usersRef = firestore.collection('users');
 
@@ -140,9 +143,9 @@ class MapSampleState extends State<MapSample> {
             });
           }
         });
-
-        setState(() {}); // Call setState to update the markers
       }
+
+      setState(() {}); // Call setState to update the markers
     } else {
       print('No user is signed in');
     }

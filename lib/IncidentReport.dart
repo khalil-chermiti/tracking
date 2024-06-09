@@ -17,17 +17,20 @@ class IncidentReport {
         var data = doc.data() as Map<String, dynamic>;
 
         if (data != null) {
-          List<dynamic> agents = data["agents"];
+          if (data["agents"] != null) {
+            List<dynamic> agents = data["agents"];
 
-          //symotion-s) Check if any agent in the 'agents' array has the specified ID
-          for (var agent in agents) {
-            if (agent['id'] == agentId) {
-              return data["id"];
-              // Return the ID of the user (supervisor) containing the agent
+            //symotion-s) Check if any agent in the 'agents' array has the specified ID
+            for (var agent in agents) {
+              print("dafh");
+              print(agent);
+              if (agent['id'] == agentId) {
+                return data["id"];
+                // Return the ID of the user (supervisor) containing the agent
+              }
             }
           }
         }
-        return "";
       }
 
       // If no user contains the agent with the specified ID
@@ -81,18 +84,19 @@ class IncidentReport {
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Incident message cannot be empty')),
+                    const SnackBar(
+                        content: Text('Incident message cannot be empty')),
                   );
                 }
                 Navigator.of(context).pop();
               },
-              child: Text('Submit'),
+              child: const Text('Submit'),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
           ],
         );

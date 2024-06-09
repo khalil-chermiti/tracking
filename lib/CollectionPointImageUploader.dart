@@ -24,8 +24,12 @@ class CollectionPointImageUploader {
   Future<void> uploadImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.camera);
-
+    print("kiwi1");
+    print(pickedFile);
     if (pickedFile != null) {
+      print("kiwi2");
+      print(pickedFile);
+
       File imageFile = File(pickedFile.path);
       String fileName = DateTime.now().toString() + '.jpg';
 
