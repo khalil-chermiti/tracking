@@ -31,6 +31,7 @@ class MapSampleState extends State<MapSample> {
   String agentId = "";
 
   var id;
+  var currentTourneeId ;
 
   // Initial Camera Position
   static CameraPosition _kGooglePlex = const CameraPosition(
@@ -130,6 +131,7 @@ class MapSampleState extends State<MapSample> {
               final lng = point['lng'] as double;
               final markerIdVal =
                   Random().nextInt(10000).toString(); // generate random id
+
               _markers.add(
                 Marker(
                   markerId: MarkerId(markerIdVal),
@@ -391,6 +393,8 @@ class MapSampleState extends State<MapSample> {
 
         startDate = DateTime.now();
 
+        id = DateTime.now().microsecondsSinceEpoch.toString();
+
         if (!_isTracking) {
           // Start a timer to update the location every 10 seconds
           _locationUpdateTimer =
@@ -486,8 +490,6 @@ class MapSampleState extends State<MapSample> {
       final CollectionReference tourneesRef =
           _firestore.collection('tourneesRealisees');
       final String agentId = user.uid;
-
-      id = DateTime.now().microsecondsSinceEpoch.toString();
 
       await tourneesRef.add({
         "id": id,
