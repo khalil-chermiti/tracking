@@ -31,7 +31,7 @@ class MapSampleState extends State<MapSample> {
   String agentId = "";
 
   var id;
-  var currentTourneeId ;
+  var currentTourneeId;
 
   // Initial Camera Position
   static CameraPosition _kGooglePlex = const CameraPosition(
@@ -54,100 +54,105 @@ class MapSampleState extends State<MapSample> {
       final FirebaseFirestore firestore = FirebaseFirestore.instance;
       final CollectionReference agentsRef = firestore.collection('tournees');
 
-      final QuerySnapshot querySnapshot =
-          await agentsRef.where('agentId', isEqualTo: agentId).get();
+      try {
+        final QuerySnapshot querySnapshot =
+            await agentsRef.where('agentId', isEqualTo: agentId).get();
 
-      if (querySnapshot.docs.isNotEmpty) {
-        print('Agents collection matching with current logged in agent:');
-        querySnapshot.docs.forEach((document) {
-          final data = document.data() as Map<String, dynamic>;
-          if (data != null) {
-            final pointsDeCollect = data['pointsDeCollect'] as List<dynamic>;
+        if (querySnapshot.docs.isNotEmpty) {
+          print('Agents collection matching with current logged in agent:');
+          querySnapshot.docs.forEach((document) {
+            final data = document.data() as Map<String, dynamic>;
+            if (data != null) {
+              final pointsDeCollect = data['pointsDeCollect'] as List<dynamic>;
 
-            pointsDeCollect.forEach((point) {
-              final lat = point['lat'] as double;
-              final lng = point['lng'] as double;
-              final markerIdVal =
-                  Random().nextInt(10000).toString(); // generate random id
-              _markers.add(
-                Marker(
-                  markerId: MarkerId(markerIdVal),
-                  position: LatLng(lat, lng),
-                  icon: BitmapDescriptor.defaultMarker,
-                ),
-              );
+              pointsDeCollect.forEach((point) {
+                final lat = point['lat'] as double;
+                final lng = point['lng'] as double;
+                final markerIdVal =
+                    Random().nextInt(10000).toString(); // generate random id
+                _markers.add(
+                  Marker(
+                    markerId: MarkerId(markerIdVal),
+                    position: LatLng(lat, lng),
+                    icon: BitmapDescriptor.defaultMarker,
+                  ),
+                );
 
-              _collectionPoints.add(LatLng(lat, lng));
-            });
+                _collectionPoints.add(LatLng(lat, lng));
+              });
 
-            final firstPoint = pointsDeCollect[0];
-            if (firstPoint != null) {
-              _kGooglePlex = CameraPosition(
-                target: LatLng(
-                    firstPoint['lat'] as double, firstPoint['lng'] as double),
-                zoom: 19,
-              );
+              final firstPoint = pointsDeCollect[0];
+              if (firstPoint != null) {
+                _kGooglePlex = CameraPosition(
+                  target: LatLng(
+                      firstPoint['lat'] as double, firstPoint['lng'] as double),
+                  zoom: 19,
+                );
+              }
             }
-          }
-        });
-      } else {
-        print('No agents collection matching with current logged in agent');
+          });
+        } else {
+          print('No agents collection matching with current logged in agent');
+        }
+
+        final GoogleMapController controller = await _controller.future;
+
+        final loc.LocationData? location = await _locationTracker.getLocation();
+        if (location != null) {
+          LatLng currentPosition =
+              LatLng(location.latitude!, location.longitude!);
+
+          _kGooglePlex = CameraPosition(
+            target: LatLng(currentPosition.latitude, currentPosition.longitude),
+            zoom: 19,
+          );
+        }
+
+        final String supervisorId =
+            await IncidentReport.getSupervisorId(agentId);
+        print(agentId);
+        print("supervisor");
+        print(supervisorId);
+
+        final CollectionReference usersRef = firestore.collection('users');
+
+        final QuerySnapshot centreDeDepotsSnapshot =
+            await usersRef.where('id', isEqualTo: supervisorId).get();
+
+        if (centreDeDepotsSnapshot.docs.isNotEmpty) {
+          centreDeDepotsSnapshot.docs.forEach((document) {
+            final data = document.data() as Map<String, dynamic>;
+            print("sablito");
+            print(data);
+
+            if (data != null) {
+              final pointsDeCollect = data['centresDeDepots'] as List<dynamic>;
+
+              pointsDeCollect.forEach((point) {
+                final lat = point['lat'] as double;
+                final lng = point['lng'] as double;
+                final markerIdVal =
+                    Random().nextInt(10000).toString(); // generate random id
+
+                _markers.add(
+                  Marker(
+                    markerId: MarkerId(markerIdVal),
+                    position: LatLng(lat, lng),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(
+                        BitmapDescriptor.hueViolet),
+                  ),
+                );
+
+                _collectionPoints.add(LatLng(lat, lng));
+              });
+            }
+          });
+        }
+
+        setState(() {}); // Call setState to update the markers
+      } catch (e) {
+        print('Error fetching agent collection: $e');
       }
-
-      await _controller.future;
-
-      final loc.LocationData? location = await _locationTracker.getLocation();
-      if (location != null) {
-        LatLng currentPosition =
-            LatLng(location.latitude!, location.longitude!);
-
-        _kGooglePlex = CameraPosition(
-          target: LatLng(currentPosition.latitude, currentPosition.longitude),
-          zoom: 19,
-        );
-      }
-
-      final String supervisorId = await IncidentReport.getSupervisorId(agentId);
-      print(agentId);
-      print("supervisor");
-      print(supervisorId);
-
-      final CollectionReference usersRef = firestore.collection('users');
-
-      final QuerySnapshot centreDeDepotsSnapshot =
-          await usersRef.where('id', isEqualTo: supervisorId).get();
-
-      if (centreDeDepotsSnapshot.docs.isNotEmpty) {
-        centreDeDepotsSnapshot.docs.forEach((document) {
-          final data = document.data() as Map<String, dynamic>;
-          print("sablito");
-          print(data);
-
-          if (data != null) {
-            final pointsDeCollect = data['centresDeDepots'] as List<dynamic>;
-
-            pointsDeCollect.forEach((point) {
-              final lat = point['lat'] as double;
-              final lng = point['lng'] as double;
-              final markerIdVal =
-                  Random().nextInt(10000).toString(); // generate random id
-
-              _markers.add(
-                Marker(
-                  markerId: MarkerId(markerIdVal),
-                  position: LatLng(lat, lng),
-                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueViolet),
-                ),
-              );
-
-              _collectionPoints.add(LatLng(lat, lng));
-            });
-          }
-        });
-      }
-
-      setState(() {}); // Call setState to update the markers
     } else {
       print('No user is signed in');
     }
@@ -412,7 +417,7 @@ class MapSampleState extends State<MapSample> {
                   Marker(
                     markerId: MarkerId('currentLocation'),
                     position: newLatLng,
-                    icon: BitmapDescriptor.defaultMarker,
+                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
                   ),
                 );
               });
